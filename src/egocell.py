@@ -38,8 +38,8 @@ for c in range(COLS):
         rows[r].append(cell_id)
     columns.append(column)
 
-CELL_W = 80
-CELL_H = 30
+CELL_W = 100
+CELL_H = 20
 MIN_SCALE = 0.2
 MAX_SCALE = 5.0
 
@@ -65,7 +65,7 @@ class Sheet(Gtk.Box):
 
         self.scale = 1.0
         self.hovered_cell = None
-        self.selected = ""
+        self.selected = "A1"
         self.go_mode = False
         self.go_col = ""
         self.go_row = ""
@@ -121,6 +121,8 @@ class Sheet(Gtk.Box):
         ctx.translate(self.offset_x, self.offset_y)
         ctx.scale(self.scale, self.scale)
 
+        ctx.select_font_face("CMU Serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        ctx.set_font_size(12)
 
         for c, column in enumerate(columns):
             for r, cell_id in enumerate(column):
@@ -146,9 +148,6 @@ class Sheet(Gtk.Box):
                     ctx.rectangle(x0, y0, CELL_W, CELL_H)
                     ctx.set_line_width(0.4)
                     ctx.stroke()
-
-                ctx.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
-                ctx.set_font_size(12)
 
                 formula = cell["formula"]
                 tree = ast.parse(formula)
@@ -177,33 +176,75 @@ class Sheet(Gtk.Box):
                 ctx.move_to(tx, ty)
                 ctx.show_text(text)
 
+
+        ctx.select_font_face("CMU Sans Serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        ctx.set_font_size(12/self.scale)
+        print(self.scale)
+
+        bw = .4
+
         for c, cell_id in enumerate(rows[0]):
             x0 = c * CELL_W
             y0 = 0
             text = cells[cell_id]["col_id"]
+
+            if c == cells[self.selected]["column"]:
+                ctx.select_font_face("CMU Sans Serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+                bw = 2
+
             xbearing, ybearing, textw, texth, _, _ = ctx.text_extents(text)
             tx = x0 + (CELL_W - textw) / 2 - xbearing 
-            ty = y0 + (CELL_H - texth) / 2 - ybearing - self.offset_y/self.scale
-            ctx.set_source_rgb(1.0,1.0,1.0)
-            ctx.rectangle(x0, y0-self.offset_y/self.scale, CELL_W, CELL_H)
+            ty = y0 + (CELL_H/self.scale - texth) / 2 - ybearing - self.offset_y/self.scale
+            ctx.set_source_rgb(0.75294118,0.75294118,0.75294118)
+            ctx.rectangle(x0, y0-self.offset_y/self.scale, CELL_W, CELL_H/self.scale)
             ctx.fill()
             ctx.set_source_rgb(0, 0, 0)
+            ctx.rectangle(x0, y0-self.offset_y/self.scale, CELL_W, CELL_H/self.scale)
+            ctx.set_line_width(bw)
+            ctx.stroke()
             ctx.move_to(tx,ty)
             ctx.show_text(text)
+            if c == cells[self.selected]["column"]:
+                ctx.select_font_face("CMU Sans Serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_SLANT_NORMAL)
+                bw = .4
 
         for r, cell_id in enumerate(columns[0]):
             x0 = 0
             y0 = r * CELL_H
             text = str(r+1)
+
+            if r == cells[self.selected]["row"]:
+                ctx.select_font_face("CMU Sans Serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+                bw = 2
+
             xbearing, ybearing, textw, texth, _, _ = ctx.text_extents(text)
-            tx = x0 + (40 - textw) / 2 - xbearing - self.offset_x/self.scale
+            tx = x0 + (40/self.scale - textw) / 2 - xbearing - self.offset_x/self.scale
             ty = y0 + (CELL_H - texth) / 2 - ybearing
-            ctx.set_source_rgb(1.0,1.0,1.0)
-            ctx.rectangle(x0-self.offset_x/self.scale, y0, 40, CELL_H)
+            ctx.set_source_rgb(0.75294118,0.75294118,0.75294118)
+            ctx.rectangle(x0-self.offset_x/self.scale, y0, 40/self.scale, CELL_H)
             ctx.fill()
             ctx.set_source_rgb(0, 0, 0)
+            ctx.rectangle(x0-self.offset_x/self.scale, y0, 40/self.scale, CELL_H)
+            ctx.set_line_width(bw)
+            ctx.stroke()
             ctx.move_to(tx,ty)
             ctx.show_text(text)
+            if r == cells[self.selected]["row"]:
+                ctx.select_font_face("CMU Sans Serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_SLANT_NORMAL)
+            bw = .4
+
+        xbearing, ybearing, textw, texth, _, _ = ctx.text_extents(self.selected)
+        tx = (40/self.scale - textw) / 2 - xbearing - self.offset_x/self.scale
+        ty = (CELL_H/self.scale - texth) / 2 - ybearing - self.offset_y/self.scale
+        ctx.set_source_rgb(0.75294118,0.75294118,0.75294118)
+        ctx.rectangle(0-self.offset_x/self.scale, 0-self.offset_y/self.scale, 40/self.scale, CELL_H/self.scale)
+        ctx.fill()
+        ctx.set_source_rgb(0, 0, 0)
+        ctx.rectangle(0-self.offset_x/self.scale, 0-self.offset_y/self.scale, 40/self.scale, CELL_H/self.scale)
+        ctx.set_line_width(.4)
+        ctx.stroke()
+        ctx.move_to(tx,ty)
+        ctx.show_text(self.selected)
 
         ctx.restore()
 
@@ -223,8 +264,10 @@ class Sheet(Gtk.Box):
         new_scale = self.scale * (1 + (scale - 1) * damping)
         new_scale = max(MIN_SCALE, min(MAX_SCALE, new_scale))
 
-        self.offset_x = x - content_x * new_scale
-        self.offset_y = y - content_y * new_scale
+        ox = x - content_x * new_scale
+        oy = y - content_y * new_scale
+        self.offset_x = ox if ox < 40 else 40
+        self.offset_y = oy if oy < CELL_H else CELL_H
 
         self.scale = new_scale
         self.slider.set_value(self.scale)
@@ -241,8 +284,10 @@ class Sheet(Gtk.Box):
             self.slider.set_value(self.scale)
             self.da.queue_draw()
             return True
-        self.offset_x -= dx
-        self.offset_y -= dy
+        ox = self.offset_x - dx
+        oy = self.offset_y - dy
+        self.offset_x = ox if ox < 40 else 40
+        self.offset_y = oy if oy < CELL_H else CELL_H
         self.da.queue_draw()
         return True
 
@@ -318,7 +363,7 @@ class Sheet(Gtk.Box):
                 self.go_row += key
                 self.select(cells[self.selected]["col_id"]+self.go_row)
             # go to column
-            elif key.upper() in cell.CHARS:
+            elif key.upper() in CHARS:
                 self.go_col += key.upper()
                 self.select(self.go_col+str(row+1))
 
