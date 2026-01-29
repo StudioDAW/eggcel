@@ -1,77 +1,12 @@
 import gi
+import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, Gdk
 import cairo
 from typing import List, Dict, Literal
 import math
-
-CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-COLS = 30
-ROWS = 60
-
-class Cell:
-    col_str: str
-    row_str: str
-    column: int
-    row: int
-    formula: str
-    content: str
-    def __init__(self, value:str, col_str:str, row_str:str, column:int, row:int, formula:str, content:str,
-                 type_:Literal["Text", "Number", "Date"]="Text"):
-        self.value = value
-        self.col_str = col_str
-        self.row_str = row_str
-        self.column = column
-        self.row = row
-        self.formula = formula
-        self.content = content
-        self.type = "Text"
-
-    def __str__(self) -> str:
-        return str(self.value)
-
-    def __getattr__(self, attr):
-        return getattr(self.value, attr)
-
-    def __type__(self):
-        return "Text"
-
-    def __len__(self):
-        return len(self.value)
-
-    def __add__(self, other):
-        return str(self) + str(other)
-
-    def __radd__(self, other):
-        return str(other) + str(self)
-
-    def __mul__(self, other):
-        return str(self) * other
-
-    def __rmul__(self, other):
-        return other * str(self)
-
-cells: Dict[str, Cell] = {}
-columns: List[List[str]] = []
-rows: List[List[str]] = []
-
-for _ in range(ROWS):
-    rows.append([])
-
-for c in range(COLS):
-    column = []
-    for r in range(ROWS):
-        i = c//len(CHARS)
-        if i == 0:
-            col_str = f"{CHARS[c]}"
-        else:
-            col_str = f"{CHARS[i-1]}{CHARS[c-i*len(CHARS)]}"
-        cell_id = col_str + str(r+1)
-        cells[cell_id] = Cell("", col_str, str(r+1), c, r, "", "")
-        column.append(cell_id)
-        rows[r].append(cell_id)
-    columns.append(column)
+from cells import COLS, ROWS, CHARS, cells, columns, rows
+import cell_types
 
 CELL_W = 100
 CELL_H = 20
@@ -79,7 +14,7 @@ MIN_SCALE = 0.2
 MAX_SCALE = 5.0
 
 formula_globals = {}
-imports = [__builtins__, math]
+imports = [__builtins__, cell_types, math]
 for i in imports: formula_globals.update({k: getattr(i, k) for k in dir(i) if not k.startswith("_")})
 def run(expression):
     return eval(expression, formula_globals, cells)
@@ -92,7 +27,14 @@ class Sheet(Gtk.Box):
 
         self.entry = Gtk.Entry()
         self.entry.set_placeholder_text("...")
+        self.entry.set_editable(True)
         self.entry.connect("activate", self.on_edit)
+
+        key_controller = Gtk.EventControllerKey.new()
+        key_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        key_controller.connect("key-pressed", self.on_input)
+        self.entry.add_controller(key_controller)
+
 
         self.entry_has_focus = False
         focus_controller = Gtk.EventControllerFocus.new()
@@ -192,11 +134,11 @@ class Sheet(Gtk.Box):
                 formula = cell.formula
                 if formula:
                     try:
-                        cell.value = str(run(formula))
+                        cell.value = run(formula)
                     except Exception as e:
                         cell.value = str(e)
                 
-                text = cell.value
+                text = str(cell.value)
                 xbearing, ybearing, textw, texth, _, _ = ctx.text_extents(text)
                 tx = x0 + (CELL_W - textw) / 2 - xbearing
                 ty = y0 + (CELL_H - texth) / 2 - ybearing
@@ -365,6 +307,11 @@ class Sheet(Gtk.Box):
             self.da.queue_draw()
 
 
+    def on_input(self, *args):
+        print(args)
+        return True
+
+
     def on_key_released(self, controller, keyval, keycode, state):
         key = Gdk.keyval_name(keyval)
         if key == "Escape":
@@ -417,10 +364,10 @@ class Sheet(Gtk.Box):
                         self.entry.select_region(s, -1)
 
         self.da.queue_draw()
+        return True
             
     def on_key_pressed(self, controller, keyval, keycode, state):
-        pass
-
+        return True
 
     def select(self, selection):
         self.selected = selection
